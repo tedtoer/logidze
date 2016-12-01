@@ -52,6 +52,24 @@ RAW
         end
       end
 
+      context "with only arg" do
+        let(:args) { ["user", "--only=\"name,age,company_id\""] }
+
+        it "creates trigger with columns whitelist" do
+          is_expected.to exist
+          is_expected.to contain(/execute procedure logidze_logger\(null, '{name, age, company_id}', TRUE\);/i)
+        end
+      end
+
+      context "with except arg" do
+        let(:args) { ["user", "--except=\"name,age,company_id\""] }
+
+        it "creates trigger with columns blacklist" do
+          is_expected.to exist
+          is_expected.to contain(/execute procedure logidze_logger\(null, '{name, age, company_id}', FALSE\);/i)
+        end
+      end
+
       context "with backfill" do
         let(:args) { ["user", "--backfill"] }
 
