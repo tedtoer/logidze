@@ -8,7 +8,6 @@ describe "Logidze triggers", :db do
     @old_post = Post.create!(title: 'First', rating: 100, active: true)
     Dir.chdir("#{File.dirname(__FILE__)}/../dummy") do
       successfully "rails generate logidze:install"
-      successfully "rails generate logidze:model post --limit 4 --backfill"
       successfully "rake db:migrate"
 
       # Close active connections to handle db variables
@@ -22,185 +21,198 @@ describe "Logidze triggers", :db do
 
   after(:all) { @old_post.destroy! }
 
-  let(:params) { { title: 'Triggers', rating: 10, active: false } }
+  describe 'without args' do
+    include_context "cleanup migrations"
 
-  describe "backfill" do
-    let(:post) { Post.find(@old_post.id) }
-
-    it "creates snaphost for existent records", :aggregate_failures do
-      expect(post.log_version).to eq 1
-      expect(post.log_size).to eq 1
-    end
-  end
-
-  describe "insert" do
-    let(:post) { Post.create!(params).reload }
-
-    it "creates initial version", :aggregate_failures do
-      expect(post.log_version).to eq 1
-      expect(post.log_size).to eq 1
-    end
-
-    context "when logging is disabled" do
-      let(:post) { Post.without_logging { Post.create!.reload } }
-
-      it "doesn't create initial version" do
-        expect(post.log_data).to be_nil
+    before(:all) do
+      Dir.chdir("#{File.dirname(__FILE__)}/../dummy") do
+        successfully "rails generate logidze:model post"
+        successfully "rake db:migrate"
+        # Close active connections to handle db variables
+        ActiveRecord::Base.connection_pool.disconnect!
       end
     end
-  end
 
-  describe "update" do
-    before(:all) { @post = Post.create! }
-    after(:all) { @post.destroy! }
+    let(:params) { { title: 'Triggers', rating: 10, active: false } }
 
-    let(:post) { @post.reload }
+    describe "insert" do
+      let(:post) { Post.create!(params).reload }
 
-    it "creates new version", :aggregate_failures do
-      post.update!(params)
-      expect(post.reload.log_version).to eq 2
-      expect(post.log_size).to eq 2
-    end
-
-    it "creates several versions", :aggregate_failures do
-      post.update!(params)
-      expect(post.log_version).to eq 1
-
-      post.update!(rating: 0)
-      expect(post.log_version).to eq 1
-
-      expect(post.reload.log_version).to eq 3
-
-      Post.where(id: post.id).update_all(active: true)
-      expect(post.reload.log_version).to eq 4
-    end
-
-    it "doesn't create new version if values not changed", :aggregate_failures do
-      Post.where(id: post.id).update_all(rating: nil)
-      expect(post.reload.log_version).to eq 1
-      expect(post.log_size).to eq 1
-    end
-
-    context "logging is disabled" do
-      it "doesn't create new version" do
-        Logidze.without_logging do
-          post.update!(params)
-          expect(post.reload.log_version).to eq 1
-          expect(post.log_size).to eq 1
-        end
-
-        post.update!(rating: 12)
-        expect(post.reload.log_version).to eq 2
-        expect(post.log_size).to eq 2
-      end
-
-      it "handles failed transaction" do
-        post.errored = true
-        expect(post).not_to be_valid
-
-        ignore_exceptions do
-          Logidze.without_logging do
-            post.update!(params)
-          end
-        end
-
-        expect(post.reload.log_version).to eq 1
+      it "creates initial version", :aggregate_failures do
+        expect(post.log_version).to eq 1
         expect(post.log_size).to eq 1
-        expect(post).to be_valid
+      end
 
-        post.update!(rating: 12)
-        expect(post.reload.log_version).to eq 2
-        expect(post.log_size).to eq 2
+      context "when logging is disabled" do
+        let(:post) { Post.without_logging { Post.create!.reload } }
+
+        it "doesn't create initial version" do
+          expect(post.log_data).to be_nil
+        end
       end
     end
 
-    context "log_data is empty" do
-      let(:post) { Post.without_logging { Post.create!(params).reload } }
+    describe "update" do
+      before(:all) { @post = Post.create! }
+      after(:all) { @post.destroy! }
+
+      let(:post) { @post.reload }
+
+      it "creates new version", :aggregate_failures do
+        post.update!(params)
+        expect(post.reload.log_version).to eq 2
+        expect(post.log_size).to eq 2
+      end
 
       it "creates several versions", :aggregate_failures do
-        post.update!(rating: 0)
-        post.update!(title: 'Updated')
-        expect(post.log_data).to be_nil
+        post.update!(params)
+        expect(post.log_version).to eq 1
 
-        expect(post.reload.log_version).to eq 2
+        post.update!(rating: 0)
+        expect(post.log_version).to eq 1
+
+        expect(post.reload.log_version).to eq 3
 
         Post.where(id: post.id).update_all(active: true)
+        expect(post.reload.log_version).to eq 4
+      end
+
+      it "doesn't create new version if values not changed", :aggregate_failures do
+        Post.where(id: post.id).update_all(rating: nil)
+        expect(post.reload.log_version).to eq 1
+        expect(post.log_size).to eq 1
+      end
+
+      context "logging is disabled" do
+        it "doesn't create new version" do
+          Logidze.without_logging do
+            post.update!(params)
+            expect(post.reload.log_version).to eq 1
+            expect(post.log_size).to eq 1
+          end
+
+          post.update!(rating: 12)
+          expect(post.reload.log_version).to eq 2
+          expect(post.log_size).to eq 2
+        end
+
+        it "handles failed transaction" do
+          post.errored = true
+          expect(post).not_to be_valid
+
+          ignore_exceptions do
+            Logidze.without_logging do
+              post.update!(params)
+            end
+          end
+
+          expect(post.reload.log_version).to eq 1
+          expect(post.log_size).to eq 1
+          expect(post).to be_valid
+
+          post.update!(rating: 12)
+          expect(post.reload.log_version).to eq 2
+          expect(post.log_size).to eq 2
+        end
+      end
+
+      context "log_data is empty" do
+        let(:post) { Post.without_logging { Post.create!(params).reload } }
+
+        it "creates several versions", :aggregate_failures do
+          post.update!(rating: 0)
+          post.update!(title: 'Updated')
+          expect(post.log_data).to be_nil
+
+          expect(post.reload.log_version).to eq 2
+
+          Post.where(id: post.id).update_all(active: true)
+          expect(post.reload.log_version).to eq 3
+        end
+      end
+    end
+
+    describe "undo/redo" do
+      before(:all) { @post = Post.create!(title: 'Triggers', rating: 10) }
+      after(:all) { @post.destroy! }
+
+      let(:post) { @post.reload }
+
+      it "undo and redo" do
+        post.update!(rating: 5)
+        post.update!(title: 'Good Triggers')
+
         expect(post.reload.log_version).to eq 3
+        expect(post.log_size).to eq 3
+
+        post.undo!
+        expect(post.reload.log_version).to eq 2
+        expect(post.log_size).to eq 3
+        expect(post.title).to eq 'Triggers'
+        expect(post.rating).to eq 5
+
+        post.undo!
+        expect(post.reload.log_version).to eq 1
+        expect(post.log_size).to eq 3
+        expect(post.title).to eq 'Triggers'
+        expect(post.rating).to eq 10
+
+        post.redo!
+        expect(post.reload.log_version).to eq 2
+        expect(post.log_size).to eq 3
+        expect(post.title).to eq 'Triggers'
+        expect(post.rating).to eq 5
+
+        post.redo!
+        expect(post.reload.log_version).to eq 3
+        expect(post.log_size).to eq 3
+        expect(post.title).to eq 'Good Triggers'
+        expect(post.rating).to eq 5
+      end
+
+      it "removes future version when updated after undo" do
+        post.update!(rating: 5)
+        post.reload.undo!
+
+        expect(post.reload.log_version).to eq 1
+        expect(post.log_size).to eq 2
+        expect(post.rating).to eq 10
+
+        post.update!(title: 'No Future')
+        expect(post.reload.log_version).to eq 2
+        expect(post.log_size).to eq 2
+
+        post.undo!
+        expect(post.reload.log_version).to eq 1
+        expect(post.log_size).to eq 2
+        expect(post.rating).to eq 10
+        expect(post.title).to eq "Triggers"
+      end
+
+      it "there and back again" do
+        post.update!(rating: 5)
+
+        post_was = post.reload
+
+        post.undo!
+        post.redo!
+        expect(post.reload).to eq post_was
       end
     end
   end
 
-  describe "undo/redo" do
-    before(:all) { @post = Post.create!(title: 'Triggers', rating: 10) }
-    after(:all) { @post.destroy! }
+  describe 'with limit arg' do
+    include_context "cleanup migrations"
 
-    let(:post) { @post.reload }
-
-    it "undo and redo" do
-      post.update!(rating: 5)
-      post.update!(title: 'Good Triggers')
-
-      expect(post.reload.log_version).to eq 3
-      expect(post.log_size).to eq 3
-
-      post.undo!
-      expect(post.reload.log_version).to eq 2
-      expect(post.log_size).to eq 3
-      expect(post.title).to eq 'Triggers'
-      expect(post.rating).to eq 5
-
-      post.undo!
-      expect(post.reload.log_version).to eq 1
-      expect(post.log_size).to eq 3
-      expect(post.title).to eq 'Triggers'
-      expect(post.rating).to eq 10
-
-      post.redo!
-      expect(post.reload.log_version).to eq 2
-      expect(post.log_size).to eq 3
-      expect(post.title).to eq 'Triggers'
-      expect(post.rating).to eq 5
-
-      post.redo!
-      expect(post.reload.log_version).to eq 3
-      expect(post.log_size).to eq 3
-      expect(post.title).to eq 'Good Triggers'
-      expect(post.rating).to eq 5
+    before(:all) do
+      Dir.chdir("#{File.dirname(__FILE__)}/../dummy") do
+        successfully "rails generate logidze:model post --limit 4"
+        successfully "rake db:migrate"
+        # Close active connections to handle db variables
+        ActiveRecord::Base.connection_pool.disconnect!
+      end
+      @post = Post.create!(title: 'Triggers', rating: 10)
     end
-
-    it "removes future version when updated after undo" do
-      post.update!(rating: 5)
-      post.reload.undo!
-
-      expect(post.reload.log_version).to eq 1
-      expect(post.log_size).to eq 2
-      expect(post.rating).to eq 10
-
-      post.update!(title: 'No Future')
-      expect(post.reload.log_version).to eq 2
-      expect(post.log_size).to eq 2
-
-      post.undo!
-      expect(post.reload.log_version).to eq 1
-      expect(post.log_size).to eq 2
-      expect(post.rating).to eq 10
-      expect(post.title).to eq "Triggers"
-    end
-
-    it "there and back again" do
-      post.update!(rating: 5)
-
-      post_was = post.reload
-
-      post.undo!
-      post.redo!
-      expect(post.reload).to eq post_was
-    end
-  end
-
-  describe "limit" do
-    before(:all) { @post = Post.create!(title: 'Triggers', rating: 10) }
-    after(:all) { @post.destroy! }
 
     let(:post) { @post.reload }
 
@@ -223,6 +235,71 @@ describe "Logidze triggers", :db do
       expect(post.log_size).to eq 4
       expect(post.log_data.versions.first.changes)
         .to include("title" => "Triggers", "rating" => 22, "active" => true)
+    end
+  end
+
+  describe 'with backfill arg' do
+    include_context "cleanup migrations"
+
+    before(:all) do
+      Dir.chdir("#{File.dirname(__FILE__)}/../dummy") do
+        successfully "rails generate logidze:model post --backfill"
+        successfully "rake db:migrate"
+        # Close active connections to handle db variables
+        ActiveRecord::Base.connection_pool.disconnect!
+      end
+      @post = Post.create!(title: 'Triggers', rating: 10)
+    end
+
+    let(:post) { Post.find(@old_post.id) }
+
+    it "creates snaphost for existent records", :aggregate_failures do
+      expect(post.log_version).to eq 1
+      expect(post.log_size).to eq 1
+    end
+  end
+
+  describe "with 'only' arg" do
+    include_context "cleanup migrations"
+
+    before(:all) do
+      Dir.chdir("#{File.dirname(__FILE__)}/../dummy") do
+        successfully "rails generate logidze:model post --only='title,active'"
+        successfully "rake db:migrate"
+        # Close active connections to handle db variables
+        ActiveRecord::Base.connection_pool.disconnect!
+      end
+      @post = Post.create!(title: 'Triggers', rating: 10, active: true)
+    end
+
+    let(:post) { @post.reload }
+
+    it "stores only specified columns changes", :aggregate_failures do
+      post.update!(rating: 11, title: 'foobar', active: false)
+      expect(post.log_data.versions.first.changes)
+        .to include("title" => "foobar", "active" => false)
+    end
+  end
+
+  describe "with 'except' arg" do
+    include_context "cleanup migrations"
+
+    before(:all) do
+      Dir.chdir("#{File.dirname(__FILE__)}/../dummy") do
+        successfully "rails generate logidze:model post --except='title,active'"
+        successfully "rake db:migrate"
+        # Close active connections to handle db variables
+        ActiveRecord::Base.connection_pool.disconnect!
+      end
+      @post = Post.create!(title: 'Triggers', rating: 10, active: true)
+    end
+
+    let(:post) { @post.reload }
+
+    it "stores all columns changes except specified columns", :aggregate_failures do
+      post.update!(rating: 11, title: 'foobar', active: false)
+      expect(post.log_data.versions.first.changes)
+        .to include("rating" => 11)
     end
   end
 end

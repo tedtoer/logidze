@@ -52,7 +52,7 @@ RAW
         end
       end
 
-      context "with only arg" do
+      context "with 'only' arg" do
         let(:args) { ["user", "--only=\"name,age,company_id\""] }
 
         it "creates trigger with columns whitelist" do
@@ -61,7 +61,7 @@ RAW
         end
       end
 
-      context "with except arg" do
+      context "with 'except' arg" do
         let(:args) { ["user", "--except=\"name,age,company_id\""] }
 
         it "creates trigger with columns blacklist" do
