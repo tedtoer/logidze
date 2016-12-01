@@ -74,7 +74,7 @@ module Logidze
       end
 
       def columns_to_sql_arg(columns_string)
-        "'{#{columns_string}}'".gsub('"', '').gsub(',', ', ')
+        "'#{columns_string}'".gsub('"', '')
       end
     end
   end

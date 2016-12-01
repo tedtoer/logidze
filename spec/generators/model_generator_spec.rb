@@ -57,7 +57,7 @@ RAW
 
         it "creates trigger with columns whitelist" do
           is_expected.to exist
-          is_expected.to contain(/execute procedure logidze_logger\(null, '{name, age, company_id}', TRUE\);/i)
+          is_expected.to contain(/execute procedure logidze_logger\(null, 'name,age,company_id', TRUE\);/i)
         end
       end
 
@@ -66,7 +66,7 @@ RAW
 
         it "creates trigger with columns blacklist" do
           is_expected.to exist
-          is_expected.to contain(/execute procedure logidze_logger\(null, '{name, age, company_id}', FALSE\);/i)
+          is_expected.to contain(/execute procedure logidze_logger\(null, 'name,age,company_id', FALSE\);/i)
         end
       end
 

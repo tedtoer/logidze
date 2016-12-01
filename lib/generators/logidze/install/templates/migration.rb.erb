@@ -103,16 +103,56 @@ class <%= @migration_class_name %> < ActiveRecord::Migration
           merged jsonb;
           iterator integer;
           item record;
+          res jsonb;
+          new_res jsonb;
+          old_res jsonb;
+          new_res_2 jsonb;
+          old_res_2 jsonb;
+          key text;
         BEGIN
 
-          IF TG_OP = 'INSERT' THEN
+          new_res := to_jsonb(NEW.*);
 
-            NEW.log_data := logidze_snapshot(to_jsonb(NEW.*));
+          IF TG_ARGV[2] = 'true' THEN
+            new_res_2 := jsonb_build_object();
+            FOREACH key IN ARRAY regexp_split_to_array(TG_ARGV[1], ',')
+            LOOP
+              new_res_2 := new_res_2 || to_jsonb(json_build_object(key, new_res->key));
+            END LOOP;
+            new_res := new_res_2;
+          ELSIF TG_ARGV[2] = 'false' THEN
+            FOREACH key IN ARRAY regexp_split_to_array(TG_ARGV[1], ',')
+            LOOP 
+              new_res := new_res - key;
+            END LOOP;
+          END IF;
+
+          res := new_res;
+
+          IF TG_OP = 'INSERT' THEN
+            
+            NEW.log_data := logidze_snapshot(res);
           
           ELSIF TG_OP = 'UPDATE' THEN
+
+            old_res := to_jsonb(OLD.*);
+
+            IF TG_ARGV[2] = 'true' THEN
+              old_res_2 := jsonb_build_object();
+              FOREACH key IN ARRAY regexp_split_to_array(TG_ARGV[1], ',')
+              LOOP
+                old_res_2 := old_res_2 || to_jsonb(json_build_object(key, old_res->key));
+              END LOOP;
+              old_res := new_res_2;
+            ELSIF TG_ARGV[2] = 'false' THEN
+              FOREACH key IN ARRAY regexp_split_to_array(TG_ARGV[1], ',')
+              LOOP
+                old_res := old_res - key;
+              END LOOP;
+            END IF;
           
             IF OLD.log_data is NULL OR OLD.log_data = '{}'::jsonb THEN
-              NEW.log_data := logidze_snapshot(to_jsonb(NEW.*));
+              NEW.log_data := logidze_snapshot(res);
               RETURN NEW;
             END IF;
 
@@ -143,9 +183,7 @@ class <%= @migration_class_name %> < ActiveRecord::Migration
               END LOOP;
             END IF;
 
-            changes := hstore_to_jsonb_loose(
-              hstore(NEW.*) - hstore(OLD.*)
-            );
+            changes := res || old_res;
 
             new_v := (NEW.log_data#>>'{h,-1,v}')::int + 1;
 

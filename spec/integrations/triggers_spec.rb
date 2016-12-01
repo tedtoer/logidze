@@ -276,6 +276,7 @@ describe "Logidze triggers", :db do
 
     it "stores only specified columns changes", :aggregate_failures do
       post.update!(rating: 11, title: 'foobar', active: false)
+      puts post.reload.log_data.inspect
       expect(post.reload.log_data.versions.last.changes)
         .to include("title" => "foobar", "active" => false)
       expect(post.log_data.versions.last.changes)
