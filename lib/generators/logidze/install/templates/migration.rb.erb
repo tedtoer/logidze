@@ -116,7 +116,12 @@ class <%= @migration_class_name %> < ActiveRecord::Migration
               RETURN NEW;
             END IF;
 
-            history_limit := TG_ARGV[0];
+            IF TG_ARGV[0] = 'null' THEN
+              history_limit := null;
+            ELSE
+              history_limit := TG_ARGV[0];
+            END IF;
+
             current_version := (NEW.log_data->>'v')::int;
 
             IF NEW = OLD THEN

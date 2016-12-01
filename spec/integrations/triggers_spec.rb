@@ -276,8 +276,10 @@ describe "Logidze triggers", :db do
 
     it "stores only specified columns changes", :aggregate_failures do
       post.update!(rating: 11, title: 'foobar', active: false)
-      expect(post.log_data.versions.first.changes)
+      expect(post.reload.log_data.versions.last.changes)
         .to include("title" => "foobar", "active" => false)
+      expect(post.log_data.versions.last.changes)
+        .not_to include("rating" => 11)
     end
   end
 
@@ -298,8 +300,10 @@ describe "Logidze triggers", :db do
 
     it "stores all columns changes except specified columns", :aggregate_failures do
       post.update!(rating: 11, title: 'foobar', active: false)
-      expect(post.log_data.versions.first.changes)
+      expect(post.reload.log_data.versions.last.changes)
         .to include("rating" => 11)
+      expect(post.reload.log_data.versions.last.changes)
+        .not_to include("title" => "foobar", "active" => false)
     end
   end
 end
