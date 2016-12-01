@@ -11,7 +11,7 @@ class <%= @migration_class_name %> < ActiveRecord::Migration
       CREATE TRIGGER logidze_on_<%= table_name %>
       BEFORE UPDATE OR INSERT ON <%= table_name %> FOR EACH ROW
       WHEN (coalesce(#{current_setting('logidze.disabled')}, '') <> 'on')
-      EXECUTE PROCEDURE logidze_logger(<%= limit || '' %>);
+      EXECUTE PROCEDURE logidze_logger(<%= args_string %>);
     SQL
 
     <% if backfill? %>

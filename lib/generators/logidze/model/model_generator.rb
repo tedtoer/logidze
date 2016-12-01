@@ -9,6 +9,12 @@ module Logidze
 
       class_option :limit, type: :numeric, optional: true, desc: "Specify history size limit"
 
+      class_option :only, type: :string, optional: true,
+                   desc: "Specify columns for filtering by whitelist"
+
+      class_option :except, type: :string, optional: true,
+                   desc: "Specify columns for filtering by blacklist"
+
       class_option :backfill, type: :boolean, optional: true,
                               desc: "Add query to backfill existing records history"
 
@@ -34,8 +40,22 @@ module Logidze
           "#{migration_name}.rb"
         end
 
-        def limit
-          options[:limit]
+        def args_string
+          args_array = []
+
+          args_array.push(options[:limit]) if options[:limit].present?
+
+          if options[:only].present?
+            args_array.push('null') if options[:limit].blank?
+            args_array.push(columns_to_sql_arg(options[:only]))
+            args_array.push('TRUE')
+          elsif options[:except].present?
+            args_array.push('null') if options[:limit].blank?
+            args_array.push(columns_to_sql_arg(options[:except]))
+            args_array.push('FALSE')
+          end
+
+          args_array.join(', ')
         end
 
         def backfill?
@@ -51,6 +71,10 @@ module Logidze
 
       def model_file_path
         File.join("app", "models", "#{file_path}.rb")
+      end
+
+      def columns_to_sql_arg(columns_string)
+        "'{#{columns_string}}'".gsub('"', '').gsub(',', ', ')
       end
     end
   end
